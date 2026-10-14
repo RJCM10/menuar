@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MenúAR – Prototipo v0.2</title>
+<style>
+  :root{ --blue:#2f9be6; --blue-d:#1d6fb0; --ink:#26303b; --mute:#6b7785; --line:#dde7f1; --ok:#2e9e6b; }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:#0b1620;color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+
+  /* pantalla de inicio: lo único visible hasta activar la cámara */
+  #start{position:fixed;inset:0;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:28px;
+    background:radial-gradient(circle at 50% 30%,#1d6fb0,#0b1620 70%);color:#fff}
+  #start h1{margin:0 0 6px;font-size:34px;letter-spacing:.5px}
+  #start p{margin:0 0 26px;max-width:320px;line-height:1.45;color:#cfe3f4;font-size:15px}
+  #start .logo{font-size:56px;margin-bottom:10px}
+  #go{border:0;border-radius:999px;padding:15px 30px;font-size:17px;font-weight:700;background:#fff;color:var(--blue-d);box-shadow:0 8px 24px #0006}
+  #go:disabled{opacity:.6}
+  #err{margin-top:16px;color:#ffb4b0;font-size:14px;max-width:320px}
+
+  /* cámara */
+  #cam{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;background:#000}
+  #layer{position:fixed;inset:0;pointer-events:none;z-index:20;overflow:hidden}
+
+  /* barra superior */
+  #top{position:fixed;top:0;left:0;right:0;z-index:40;display:none;gap:8px;align-items:center;padding:calc(10px + env(safe-area-inset-top)) 12px 18px;
+    background:linear-gradient(#000b,#0000)}
+  #top.on{display:flex}
+  .lang button{border:0;border-radius:999px;padding:7px 12px;font-weight:700;font-size:13px;background:#ffffff33;color:#fff;margin-right:6px;backdrop-filter:blur(6px)}
+  .lang button.on{background:#fff;color:var(--blue-d)}
+  #status{margin-left:auto;font-size:12.5px;color:#fff;background:#0007;padding:6px 10px;border-radius:999px;display:flex;align-items:center;gap:6px}
+  #status i{width:8px;height:8px;border-radius:50%;background:#f5b942;display:inline-block}
+  #status.scan i{background:#43d17f;animation:pulse 1s infinite}
+  @keyframes pulse{50%{opacity:.25}}
+
+  /* tarjeta anclada al nombre del platillo */
+  .anchor{position:absolute;pointer-events:auto;transition:left .25s,top .25s,opacity .25s;opacity:0;transform-origin:left top}
+  .anchor.vis{opacity:1}
+  .box{position:absolute;border:2.5px solid #43d17f;border-radius:6px;background:#43d17f22;box-shadow:0 0 0 2px #0003}
+  .card{position:absolute;display:flex;gap:8px;align-items:center;width:214px;background:rgba(255,255,255,.97);border-radius:14px;padding:6px 10px 6px 7px;
+    box-shadow:0 8px 26px #0006;border:1px solid var(--line);animation:pop .25s ease-out}
+  @keyframes pop{from{transform:scale(.85);opacity:0}to{transform:none;opacity:1}}
+  .card::before{content:"";position:absolute;left:14px;width:12px;height:12px;background:#fff;transform:rotate(45deg);border:1px solid var(--line);border-right:0;border-bottom:0}
+  .card.below::before{top:-7px}
+  .card.above::before{bottom:-7px;transform:rotate(225deg)}
+  .card.nolink::before{display:none}
+  .plate{width:38px;height:38px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:21px;overflow:hidden;
+    background:radial-gradient(circle at 35% 30%,#fff,#cfe8fa 60%,#9fd0f3);box-shadow:inset -4px -5px 9px #0002,0 4px 9px #0003;animation:spin 6s ease-in-out infinite}
+  .plate img{width:100%;height:100%;object-fit:cover}
+  @keyframes spin{0%,100%{transform:rotateY(-18deg)}50%{transform:rotateY(18deg)}}
+  .c-main{min-width:0;flex:1}
+  .c-tr{font-weight:700;font-size:13px;line-height:1.15;color:var(--ink)}
+  .c-meta{display:flex;gap:6px;align-items:center;margin-top:3px;flex-wrap:nowrap;white-space:nowrap}
+  .chili{font-size:11px;letter-spacing:0}.chili .off{filter:grayscale(1) opacity(.3)}
+  .badge{font-size:10.5px;font-weight:700;border-radius:999px;padding:1px 6px}
+  .badge.al{background:#fdecea;color:#a8322d}.badge.ok{background:#e4f6ec;color:var(--ok)}
+
+  /* hoja con el detalle */
+  #sheet{position:fixed;left:0;right:0;bottom:0;z-index:50;display:none;padding:12px;pointer-events:none}
+  #sheet.show{display:block}
+  .full{pointer-events:auto;max-width:460px;margin:0 auto;background:#fffffff7;border-radius:20px;padding:14px 16px 16px;box-shadow:0 10px 40px #0007;animation:up .25s ease-out;max-height:70vh;overflow:auto}
+  @keyframes up{from{transform:translateY(24px);opacity:0}to{transform:none;opacity:1}}
+  .full .top{display:flex;gap:14px;align-items:center}
+  .full .plate{width:76px;height:76px;font-size:40px}
+  .full h3{margin:0;font-size:18px}.full .tr{font-size:15px;color:var(--blue-d);font-weight:700}
+  .full .ds{font-size:12.5px;color:var(--mute)}
+  .x{margin-left:auto;align-self:flex-start;border:0;background:#eef3f8;border-radius:50%;width:30px;height:30px;font-size:15px;color:var(--mute)}
+  .row{margin-top:11px;font-size:14px}
+  .k{font:700 11px system-ui;color:var(--mute);text-transform:uppercase;letter-spacing:.6px;margin-bottom:3px}
+  .tags{display:flex;flex-wrap:wrap;gap:6px}.tag{background:#eef3f8;border-radius:999px;padding:4px 10px;font-size:13px}
+  .tag.al{background:#fdecea;color:#a8322d;font-weight:700}
+  .none{color:var(--ok);font-weight:700}
+  #hint{position:fixed;left:0;right:0;bottom:calc(18px + env(safe-area-inset-bottom));z-index:30;text-align:center;color:#fff;font-size:14px;pointer-events:none;display:none}
+  #hint span{background:#000a;padding:8px 14px;border-radius:999px}
+</style>
+</head>
+<body>
+
+<div id="start">
+  <div class="logo">📷</div>
+  <h1>MenúAR</h1>
+  <p>Activa tu cámara y apúntala a un platillo del menú. Te mostramos su traducción, ingredientes, alérgenos y picante en realidad aumentada.</p>
+  <button id="go">Activar cámara</button>
+  <div id="err"></div>
+</div>
+
+<video id="cam" autoplay playsinline muted></video>
+<div id="layer"></div>
+
+<div id="top">
+  <div class="lang"><button data-l="en" class="on">EN</button><button data-l="fr">FR</button></div>
+  <div id="status"><i></i><span id="stxt">Cargando…</span></div>
+</div>
+<div id="hint"><span id="hintxt">Apunta al nombre de un platillo</span></div>
+<div id="sheet"></div>
+
+<script>
+/* ================= Configuración ================= */
+const params = new URLSearchParams(location.search);
+const LOCAL = params.get("local");           // solo para pruebas sin internet
+const OCR_EVERY_MS = 700;                    // cada cuánto se "lee" la cámara
+const KEEP_MS = 1800;                        // cuánto se conserva una tarjeta si el nombre deja de verse
+const MATCH_THRESHOLD = 0.8;                 // tolerancia a errores de lectura (0-1)
+
+/* ================= Base de datos de platillos ================= */
+/* "keys" = cómo aparece el nombre en el menú. A futuro: img = foto real del platillo */
+const DISHES = [
+  { id:"cabrito",   keys:["cabrito al pastor","cabrito"], emoji:"🍖", spice:1, img:null,
+    es:"Cabrito al pastor",
+    en:{ name:"Roasted young goat", desc:"Slow-roasted over coals", ing:["Young goat","Salt","Garlic","Lime"], al:[] },
+    fr:{ name:"Chevreau rôti", desc:"Rôti lentement sur braises", ing:["Chevreau","Sel","Ail","Citron vert"], al:[] } },
+  { id:"machacado", keys:["machacado con huevo","machacado"], emoji:"🍳", spice:2, img:null,
+    es:"Machacado con huevo",
+    en:{ name:"Shredded dried beef with eggs", desc:"Northern Mexico breakfast classic", ing:["Dried beef","Eggs","Tomato","Onion","Serrano chili"], al:["Eggs"] },
+    fr:{ name:"Bœuf séché aux œufs", desc:"Classique du petit-déjeuner du nord", ing:["Bœuf séché","Œufs","Tomate","Oignon","Piment serrano"], al:["Œufs"] } },
+  { id:"discada",   keys:["tacos de discada","discada"], emoji:"🌮", spice:2, img:null,
+    es:"Tacos de discada",
+    en:{ name:"Mixed-meat tacos", desc:"Beef, pork, ham and bacon cooked together", ing:["Beef","Pork","Ham","Bacon","Peppers","Flour tortilla"], al:["Gluten (wheat)"] },
+    fr:{ name:"Tacos de viandes mélangées", desc:"Bœuf, porc, jambon et lard cuits ensemble", ing:["Bœuf","Porc","Jambon","Lard","Poivrons","Tortilla de blé"], al:["Gluten (blé)"] } },
+  { id:"frijoles",  keys:["frijoles charros"], emoji:"🫘", spice:1, img:null,
+    es:"Frijoles charros",
+    en:{ name:"Cowboy-style beans", desc:"Pinto beans stewed with pork", ing:["Pinto beans","Bacon","Chorizo","Tomato","Cilantro"], al:[] },
+    fr:{ name:"Haricots façon cow-boy", desc:"Haricots pinto mijotés avec du porc", ing:["Haricots pinto","Lard","Chorizo","Tomate","Coriandre"], al:[] } },
+  { id:"caldillo",  keys:["caldillo de res"], emoji:"🍲", spice:1, img:null,
+    es:"Caldillo de res",
+    en:{ name:"Beef stew", desc:"Light tomato-chili broth with beef and potato", ing:["Beef","Potato","Tomato","Chili","Spices"], al:[] },
+    fr:{ name:"Ragoût de bœuf", desc:"Bouillon léger tomate-piment avec bœuf et pomme de terre", ing:["Bœuf","Pomme de terre","Tomate","Piment","Épices"], al:[] } },
+  { id:"glorias",   keys:["glorias"], emoji:"🍬", spice:0, img:null,
+    es:"Glorias",
+    en:{ name:"Pecan-milk candy", desc:"Traditional sweet from Nuevo León", ing:["Milk","Sugar","Pecans"], al:["Milk","Tree nuts (pecan)"] },
+    fr:{ name:"Bonbon lait-noix de pécan", desc:"Douceur traditionnelle du Nuevo León", ing:["Lait","Sucre","Noix de pécan"], al:["Lait","Fruits à coque (pécan)"] } },
+];
+const UI = {
+  en:{ ing:"Ingredients", al:"Allergens", none:"No common allergens", spice:"Spice level", more:"Tap for details", noAl:"No allergens", scan:"Scanning menu…", point:"Point at a dish name", found:n=>n+" found" },
+  fr:{ ing:"Ingrédients", al:"Allergènes", none:"Aucun allergène courant", spice:"Piquant", more:"Touchez pour voir", noAl:"Sans allergène", scan:"Lecture du menu…", point:"Visez le nom d'un plat", found:n=>n+" trouvé(s)" },
+};
+let lang = "en";
+
+/* ================= Coincidencia de texto (tolerante a errores) ================= */
+const norm = s => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9 ]+/g," ").replace(/\s+/g," ").trim();
+function lev(a,b){
+  const m=a.length,n=b.length; if(!m) return n; if(!n) return m;
+  let prev=Array.from({length:n+1},(_,j)=>j);
+  for(let i=1;i<=m;i++){ const cur=[i];
+    for(let j=1;j<=n;j++) cur[j]=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1));
+    prev=cur; }
+  return prev[n];
+}
+const sim = (a,b)=> 1 - lev(a,b)/Math.max(a.length,b.length);
+
+/* Busca cada platillo dentro de las palabras leídas por OCR (ventanas de N palabras) */
+function findDishes(words){
+  const clean = words.map(w=>({...w, n:norm(w.text)})).filter(w=>w.n);
+  const found = new Map();
+  for(const dish of DISHES){
+    let best=null;
+    for(const key of dish.keys){
+      const k = norm(key), kn = k.split(" ").length;
+      for(let i=0;i+kn<=clean.length;i++){
+        const win = clean.slice(i,i+kn);
+        // las palabras deben estar en la misma línea (aprox.)
+        const cy = win.map(w=>(w.bbox.y0+w.bbox.y1)/2), h = win[0].bbox.y1-win[0].bbox.y0;
+        if(Math.max(...cy)-Math.min(...cy) > h*0.9) continue;
+        const s = sim(win.map(w=>w.n).join(" "), k);
+        if(s>=MATCH_THRESHOLD && (!best || s>best.s)){
+          best = { s, bbox:{ x0:Math.min(...win.map(w=>w.bbox.x0)), y0:Math.min(...win.map(w=>w.bbox.y0)),
+                             x1:Math.max(...win.map(w=>w.bbox.x1)), y1:Math.max(...win.map(w=>w.bbox.y1)) } };
+        }
+      }
+    }
+    if(best) found.set(dish.id, {dish, bbox:best.bbox, score:best.s});
+  }
+  return [...found.values()];
+}
+
+/* ================= Cámara + OCR ================= */
+const $ = id=>document.getElementById(id);
+const video=$("cam"), layer=$("layer"), statusEl=$("status"), stxt=$("stxt");
+let worker=null, running=false, tracked=new Map();   // id -> {dish,bbox(video px),seen,el}
+const grab = document.createElement("canvas"), gctx = grab.getContext("2d",{willReadFrequently:true});
+
+function loadScript(src){ return new Promise((ok,bad)=>{ const s=document.createElement("script"); s.src=src; s.onload=ok; s.onerror=()=>bad(new Error("No se pudo cargar "+src)); document.head.appendChild(s); }); }
+
+async function startOCR(){
+  const base = LOCAL ? LOCAL : "https://cdn.jsdelivr.net/npm";
+  await loadScript(LOCAL ? LOCAL+"/tesseract.min.js" : "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js");
+  const opts = LOCAL ? { workerPath:LOCAL+"/worker.min.js", corePath:LOCAL+"/core", langPath:LOCAL+"/lang" } : {};
+  worker = await Tesseract.createWorker("spa", 1, opts);
+  await worker.setParameters({ tessedit_pageseg_mode: "11" });   // 11 = texto disperso (ideal para menús)
+}
+
+$("go").onclick = async ()=>{
+  const btn=$("go"); btn.disabled=true; btn.textContent="Iniciando…"; $("err").textContent="";
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ideal:"environment"}, width:{ideal:1280}, height:{ideal:720} }, audio:false });
+    video.srcObject = stream; await video.play();
+    $("start").style.display="none"; $("top").classList.add("on"); $("hint").style.display="block";
+    stxt.textContent = "Cargando lector…";
+    await startOCR();
+    running=true; setStatus(true); loop();
+  }catch(e){
+    console.error(e);
+    btn.disabled=false; btn.textContent="Activar cámara";
+    $("err").textContent = (e && e.name==="NotAllowedError") ? "Necesitamos permiso para usar la cámara." : "No se pudo iniciar: "+(e&&e.message||e);
+    $("start").style.display="flex";
+  }
+};
+
+function setStatus(scanning){ statusEl.classList.toggle("scan", scanning); stxt.textContent = scanning ? UI[lang].scan : "…"; }
+
+async function loop(){
+  while(running){
+    const t0 = performance.now();
+    if(video.videoWidth){
+      const scale = Math.min(1, 1100/video.videoWidth);
+      grab.width = Math.round(video.videoWidth*scale); grab.height = Math.round(video.videoHeight*scale);
+      gctx.drawImage(video,0,0,grab.width,grab.height);
+      try{
+        const { data } = await worker.recognize(grab);
+        const words = (data.words||[]).filter(w=>w.confidence>35).map(w=>({text:w.text, bbox:{x0:w.bbox.x0/scale,y0:w.bbox.y0/scale,x1:w.bbox.x1/scale,y1:w.bbox.y1/scale}}));
+        const hits = findDishes(words), now = performance.now();
+        for(const h of hits){
+          const prev = tracked.get(h.dish.id);
+          tracked.set(h.dish.id, { dish:h.dish, bbox:h.bbox, seen:now, el: prev ? prev.el : null });
+        }
+        window.__lastWords = words.map(w=>w.text).join(" ");
+      }catch(e){ console.warn("OCR", e); }
+    }
+    render();
+    const wait = Math.max(60, OCR_EVERY_MS - (performance.now()-t0));
+    await new Promise(r=>setTimeout(r, wait));
+  }
+}
+
+/* ================= Dibujo de tarjetas ancladas ================= */
+function toScreen(b){
+  const vw=video.videoWidth, vh=video.videoHeight, cw=innerWidth, ch=innerHeight;
+  const s = Math.max(cw/vw, ch/vh), ox=(cw-vw*s)/2, oy=(ch-vh*s)/2;
+  return { x:b.x0*s+ox, y:b.y0*s+oy, w:(b.x1-b.x0)*s, h:(b.y1-b.y0)*s };
+}
+const chili = n=>[0,1,2].map(i=>`<span class="${i<n?"":"off"}">🌶️</span>`).join("");
+const plate = d=> d.img ? `<div class="plate"><img src="${d.img}" alt=""></div>` : `<div class="plate">${d.emoji}</div>`;
+
+function cardHTML(d, scr, below){
+  const t=d[lang], L=UI[lang];
+  return `<div class="card ${below?"below":"above"}" style="${below?`top:${scr.h+12}px`:`bottom:${scr.h+12}px`};left:0">
+    ${plate(d)}
+    <div class="c-main"><div class="c-tr">${t.name}</div>
+      <div class="c-meta"><span class="chili">${chili(d.spice)}</span>
+        ${t.al.length?`<span class="badge al">⚠ ${t.al.length} ${lang==="en"?"allergen"+(t.al.length>1?"s":""):"allerg."}</span>`:`<span class="badge ok">✓ ${L.noAl}</span>`}</div></div></div>`;
+}
+
+function render(){
+  const now=performance.now(); const items=[];
+  for(const [id,t] of tracked){
+    if(now - t.seen > KEEP_MS){ if(t.el){ t.el.remove(); } tracked.delete(id); continue; }
+    const scr = toScreen(t.bbox);
+    items.push({id,t,scr,below: (scr.y+scr.h+12+70) < innerHeight-60});
+  }
+  // las tarjetas que van debajo se apilan en orden para no taparse entre sí
+  items.sort((a,b)=>a.scr.y-b.scr.y);
+  let lastBottom = -1e9; const CARD_H = 60, GAP = 6, cardW = 214;
+  for(const it of items){
+    const {t,scr,below} = it;
+    if(!t.el){
+      t.el = document.createElement("div"); t.el.className="anchor";
+      t.el.onclick = ()=>openSheet(it.id);
+      layer.appendChild(t.el); t.rendered="";
+    }
+    const sig = lang+below;
+    if(t.rendered!==sig){ t.el.innerHTML = `<div class="box" style="left:0;top:0;width:100%;height:100%"></div>`+cardHTML(t.dish, scr, below); t.rendered=sig; }
+    t.el.style.left = scr.x+"px"; t.el.style.top = scr.y+"px";
+    t.el.style.width = scr.w+"px"; t.el.style.height = scr.h+"px";
+    const card = t.el.querySelector(".card");
+    const left = Math.max(8, Math.min(scr.x, innerWidth-cardW-8));
+    card.style.left = (left-scr.x)+"px";
+    if(below){
+      const want = scr.y+scr.h+12, top = Math.max(want, lastBottom+GAP);
+      card.style.top = (top-scr.y)+"px"; card.style.bottom="auto";
+      card.classList.toggle("nolink", top>want+1);
+      lastBottom = top + (card.offsetHeight || CARD_H);
+    }
+    t.el.classList.add("vis");
+  }
+  $("hintxt").textContent = items.length ? UI[lang].found(items.length) : UI[lang].point;
+}
+
+/* ================= Hoja de detalle ================= */
+let openId=null;
+function openSheet(id){
+  openId=id; const d=DISHES.find(x=>x.id===id), t=d[lang], L=UI[lang];
+  $("sheet").innerHTML = `<div class="full">
+    <div class="top">${plate(d)}<div><h3>${d.es}</h3><div class="tr">${t.name}</div><div class="ds">${t.desc}</div></div>
+      <button class="x" onclick="closeSheet()">✕</button></div>
+    <div class="row"><div class="k">${L.ing}</div><div class="tags">${t.ing.map(i=>`<span class="tag">${i}</span>`).join("")}</div></div>
+    <div class="row"><div class="k">${L.al}</div>${t.al.length?`<div class="tags">${t.al.map(a=>`<span class="tag al">⚠ ${a}</span>`).join("")}</div>`:`<span class="none">✓ ${L.none}</span>`}</div>
+    <div class="row"><div class="k">${L.spice}</div><div class="chili" style="font-size:18px">${chili(d.spice)}</div></div></div>`;
+  $("sheet").classList.add("show");
+}
+function closeSheet(){ openId=null; $("sheet").classList.remove("show"); }
+
+/* ================= Idioma ================= */
+document.querySelectorAll(".lang [data-l]").forEach(b=>b.onclick=()=>{
+  lang=b.dataset.l; document.querySelectorAll(".lang [data-l]").forEach(x=>x.classList.toggle("on",x===b));
+  if(running) stxt.textContent = UI[lang].scan;
+  for(const t of tracked.values()) t.rendered="";
+  if(openId) openSheet(openId);
+});
+</script>
+</body>
+</html>
